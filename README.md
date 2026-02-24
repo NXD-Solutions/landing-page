@@ -1,54 +1,61 @@
-# React + TypeScript + Vite
+# Manager Hub — Landing Page
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Public-facing marketing landing page for **Manager Hub** by NXD Solutions.
 
-Currently, two official plugins are available:
+**Stack:** React 19 · Vite · TypeScript · Tailwind CSS v4
+**Live site:** deployed to GitHub Pages from the `main` branch
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## Prerequisites
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Node.js 20+
+- npm
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+---
+
+## Local development
+
+```bash
+npm install       # install dependencies
+npm run dev       # start dev server at http://localhost:5173
+npm run build     # production build → dist/
+npm run preview   # preview the production build locally
+npm test          # run tests (Vitest + Testing Library)
+npm run lint      # run ESLint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Git workflow
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+All changes must go through a feature branch and pull request — direct commits to `main` are not permitted. This applies to all contributors, human and AI alike. See decision [#24215554](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/24215554/Feature+branches+required+for+all+code+changes) for the rationale.
+
+| Type | Branch pattern | Example |
+|---|---|---|
+| New feature | `feature/<short-description>` | `feature/hero-section` |
+| Bug fix | `fix/<short-description>` | `fix/nav-mobile-overflow` |
+| Chore / tooling | `chore/<short-description>` | `chore/update-tailwind` |
+
+1. Branch from `main`
+2. Commit your changes
+3. Open a pull request against `main`
+4. Merge after review — `main` deploys automatically
+
+> **PR preview:** to test a branch on the live GitHub Pages environment, go to
+> Actions → "Deploy to GitHub Pages" → Run workflow → select your branch.
+> This temporarily replaces the production deployment, so only use it when the
+> PR is ready for review.
+
+---
+
+## Design tokens
+
+Colours and spacing are defined as CSS custom properties in `src/index.css`. Do not hardcode values — use the Tailwind token classes (e.g. `bg-primary`, `text-accent`). See `CLAUDE.md` for the full token reference.
+
+---
+
+## Further reading
+
+- [Decision Log](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/17104898/Decision+Log) — architecture and process decisions
+- `CLAUDE.md` — detailed conventions for this repository (also read by AI assistants)
