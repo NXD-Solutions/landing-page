@@ -23,7 +23,8 @@ This is the public-facing marketing landing page for **Manager Hub** by NXD Solu
 1. Create a branch from `main`: `git checkout -b feature/my-change`
 2. Make commits on the branch
 3. Open a pull request against `main`
-4. Merge only after review
+4. **Before merging**, remind the user to test the deployment via the GitHub Pages PR preview (see below) if they haven't confirmed it yet
+5. Merge only after review and deployment is verified
 
 ### Testing a PR on GitHub Pages
 GitHub Pages supports one deployment at a time. To preview a feature branch live:
