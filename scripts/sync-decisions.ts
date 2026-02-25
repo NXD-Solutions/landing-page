@@ -1,14 +1,18 @@
 /**
  * sync-decisions.ts
  *
- * Fetches all NXD platform decision pages from Confluence, extracts the
- * "## AI Summary — Developer" section from each, and writes
- * .claude/rules/decisions.md grouped by classification.
+ * Discovers all NXD platform decision pages by querying the Confluence
+ * Decision Log space, extracts the "## AI Summary — Developer" section
+ * from each, and writes .claude/rules/decisions.md grouped by classification.
+ *
+ * A page is treated as a decision page if its At a Glance table has a
+ * recognised Status value (Accepted, Proposed, Draft, Deprecated).
+ * Structural pages (folders, index pages, the template) are skipped.
  *
  * Usage:
  *   CONFLUENCE_EMAIL=you@example.com CONFLUENCE_API_TOKEN=xxx npx tsx scripts/sync-decisions.ts
  *
- * Exits with code 1 if any page is missing its AI Summary — Developer section.
+ * Exits with code 1 if any decision page is missing its AI Summary — Developer section.
  */
 
 import { writeFileSync } from "fs";
@@ -21,26 +25,25 @@ import { fileURLToPath } from "url";
 
 const CONFLUENCE_BASE = "https://nordicexperiencedesign.atlassian.net";
 
-// All decision page IDs in the NXD decision log
-const DECISION_PAGE_IDS = [
-  24215554, // Feature branches required
-  21495810, // React + Vite adopted
-  21299211, // Tailwind CSS adopted
-  23658506, // Vitest + RTL adopted
-  22675457, // Figma adopted
-  17236011, // Kubernetes
-  17268818, // Microservices
-  17236032, // OpenAI-compatible API
-  18022471, // PostgreSQL
-  17235990, // mTLS
-  17170455, // No vendor lock-in
-  17301533, // Platform scales horizontally
-  18022570, // All persistent data encrypted at rest
-  17268775, // EU data must remain in EU
-  17268796, // Customers own prompts and outputs
-  22937601, // Per-tenant branding
-  25559041, // Monorepo structure
-];
+/** Root page of the Decision Log — all descendants are scanned. */
+const DECISION_LOG_ROOT = 17104898;
+
+/**
+ * Pages to skip regardless of content.
+ * Add structural pages here (template, index pages) that would otherwise
+ * be misidentified as decision pages.
+ */
+const EXCLUDED_PAGE_IDS = new Set([
+  17268756, // 📋 Decision Template
+]);
+
+/** Status values that identify a page as a decision (not a folder/index). */
+const KNOWN_STATUSES = new Set([
+  "Accepted",
+  "Proposed",
+  "Draft",
+  "Deprecated",
+]);
 
 const OUTPUT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -52,6 +55,11 @@ const OUTPUT_PATH = resolve(
 // ---------------------------------------------------------------------------
 
 type Classification = "Standard" | "Architectural" | "Strategic" | "Unknown";
+
+interface PageRef {
+  id: number;
+  title: string;
+}
 
 interface DecisionSummary {
   id: number;
@@ -77,10 +85,48 @@ function getAuth(): string {
   return Buffer.from(`${email}:${token}`).toString("base64");
 }
 
-async function fetchPage(
-  id: number,
-  auth: string
-): Promise<{ title: string; body: string }> {
+/**
+ * Returns all pages that are descendants of DECISION_LOG_ROOT using CQL.
+ * Paginates until all results are collected.
+ */
+async function fetchAllPageRefs(auth: string): Promise<PageRef[]> {
+  const pages: PageRef[] = [];
+  const limit = 50;
+  let start = 0;
+
+  while (true) {
+    const cql = encodeURIComponent(`ancestor=${DECISION_LOG_ROOT} AND type=page`);
+    const url = `${CONFLUENCE_BASE}/wiki/rest/api/content/search?cql=${cql}&limit=${limit}&start=${start}`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) {
+      throw new Error(
+        `HTTP ${res.status} fetching page list: ${await res.text()}`
+      );
+    }
+    const data = (await res.json()) as {
+      results: Array<{ id: string; title: string }>;
+      size: number;
+      totalSize: number;
+    };
+
+    for (const r of data.results) {
+      pages.push({ id: parseInt(r.id, 10), title: r.title });
+    }
+
+    start += data.size;
+    if (start >= data.totalSize) break;
+  }
+
+  return pages;
+}
+
+/** Fetches the storage-format body of a single page. */
+async function fetchPageBody(id: number, auth: string): Promise<string> {
   const url = `${CONFLUENCE_BASE}/wiki/rest/api/content/${id}?expand=body.storage`;
   const res = await fetch(url, {
     headers: {
@@ -92,10 +138,9 @@ async function fetchPage(
     throw new Error(`HTTP ${res.status} fetching page ${id}: ${await res.text()}`);
   }
   const data = (await res.json()) as {
-    title: string;
     body: { storage: { value: string } };
   };
-  return { title: data.title, body: data.body.storage.value };
+  return data.body.storage.value;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +149,7 @@ async function fetchPage(
 
 /**
  * Strips Confluence storage-format XML/HTML tags, leaving plain text.
- * Handles <br/>, <p>, block tags as newlines; everything else stripped.
+ * Block tags are converted to newlines; everything else is stripped.
  */
 function stripTags(html: string): string {
   return html
@@ -121,20 +166,17 @@ function stripTags(html: string): string {
 
 /**
  * Extracts the Status value from the At a Glance table.
- * Looks for a <td> whose previous row label contains "Status".
+ * Returns empty string if no Status row is found.
  */
 function extractStatus(body: string): string {
-  // The At a Glance table has rows like: <th>Status</th><td>Accepted</td>
   const match = body.match(
     /<th[^>]*>\s*Status\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
   );
-  if (!match) return "Unknown";
+  if (!match) return "";
   return stripTags(match[1]).trim();
 }
 
-/**
- * Extracts the Classification value from the At a Glance table.
- */
+/** Extracts the Classification value from the At a Glance table. */
 function extractClassification(body: string): Classification {
   const match = body.match(
     /<th[^>]*>\s*Classification\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
@@ -150,12 +192,11 @@ function extractClassification(body: string): Classification {
 /**
  * Extracts bullet points from the "## AI Summary — Developer" section.
  *
- * In Confluence storage format, a markdown-style heading becomes an <h2>
- * and list items become <li> elements.  We look for the heading and collect
- * <li> text until the next heading or end of document.
+ * In Confluence storage format headings become <h2> elements and list items
+ * become <li> elements. Bullets starting with "_" are template placeholders
+ * and are ignored.
  */
 function extractDeveloperSummary(body: string): string[] {
-  // Locate the AI Summary — Developer heading (h2)
   const headingPattern =
     /<h2[^>]*>[\s\S]*?AI\s+Summary\s*[—\-–]\s*Developer[\s\S]*?<\/h2>/i;
   const headingMatch = headingPattern.exec(body);
@@ -163,13 +204,12 @@ function extractDeveloperSummary(body: string): string[] {
 
   const afterHeading = body.slice(headingMatch.index + headingMatch[0].length);
 
-  // Take content up to the next heading (h1–h6) or end of document
+  // Collect content up to the next heading
   const nextHeading = /<h[1-6][^>]*>/i.exec(afterHeading);
   const section = nextHeading
     ? afterHeading.slice(0, nextHeading.index)
     : afterHeading;
 
-  // Extract <li> items
   const bullets: string[] = [];
   const liPattern = /<li[^>]*>([\s\S]*?)<\/li>/gi;
   let liMatch: RegExpExecArray | null;
@@ -199,8 +239,8 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
     "<!-- AUTO-GENERATED — do not edit by hand.",
     "     Run `npm run sync-decisions` to regenerate from Confluence. -->",
     "",
-    "Contains the actionable constraints extracted from each accepted NXD",
-    "platform decision. Read by AI coding assistants to enforce standards.",
+    "Contains the actionable constraints extracted from each NXD platform",
+    "decision. Read by AI coding assistants to enforce standards.",
     "",
     "---",
     "",
@@ -230,13 +270,13 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
     lines.push("---", "");
   }
 
-  // Proposed / Unknown at the end
-  const other = decisions.filter(
+  // Unknown classification at the end
+  const unclassified = decisions.filter(
     (d) => !CLASSIFICATION_ORDER.includes(d.classification)
   );
-  if (other.length > 0) {
+  if (unclassified.length > 0) {
     lines.push("## Proposed / Unclassified", "");
-    for (const d of other) {
+    for (const d of unclassified) {
       lines.push(`**${d.title}** (${d.id}) — ${d.status}`);
       for (const bullet of d.bullets) {
         lines.push(`- ${bullet}`);
@@ -256,32 +296,46 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
 async function main(): Promise<void> {
   const auth = getAuth();
 
-  console.log(`Fetching ${DECISION_PAGE_IDS.length} decision pages…`);
+  console.log(`Discovering pages under Decision Log root (${DECISION_LOG_ROOT})…`);
+  const allPages = await fetchAllPageRefs(auth);
+  const candidates = allPages.filter((p) => !EXCLUDED_PAGE_IDS.has(p.id));
+  console.log(
+    `Found ${allPages.length} pages total, ${candidates.length} after exclusions. Fetching bodies…`
+  );
 
-  const results = await Promise.allSettled(
-    DECISION_PAGE_IDS.map((id) => fetchPage(id, auth).then((page) => ({ id, ...page })))
+  const bodyResults = await Promise.allSettled(
+    candidates.map((p) =>
+      fetchPageBody(p.id, auth).then((body) => ({ ...p, body }))
+    )
   );
 
   const decisions: DecisionSummary[] = [];
-  const missing: number[] = [];
+  const missing: Array<{ id: number; title: string }> = [];
   const errors: string[] = [];
 
-  for (const result of results) {
+  for (const result of bodyResults) {
     if (result.status === "rejected") {
       errors.push(String(result.reason));
       continue;
     }
 
     const { id, title, body } = result.value;
-    const bullets = extractDeveloperSummary(body);
     const status = extractStatus(body);
+
+    // Skip pages that don't look like decision pages (no recognised Status)
+    if (!KNOWN_STATUSES.has(status)) {
+      console.log(`  SKIP [${id}] ${title} (no recognised status)`);
+      continue;
+    }
+
     const classification = extractClassification(body);
+    const bullets = extractDeveloperSummary(body);
 
     if (bullets.length === 0) {
-      missing.push(id);
-      console.warn(`  MISSING AI Summary — Developer: [${id}] ${title}`);
+      missing.push({ id, title });
+      console.warn(`  WARN [${id}] ${title} — missing AI Summary — Developer`);
     } else {
-      console.log(`  OK  [${id}] ${title} (${classification}, ${status})`);
+      console.log(`  OK   [${id}] ${title} (${classification}, ${status})`);
     }
 
     decisions.push({ id, title, status, classification, bullets });
@@ -295,13 +349,13 @@ async function main(): Promise<void> {
 
   const markdown = buildMarkdown(decisions);
   writeFileSync(OUTPUT_PATH, markdown, "utf-8");
-  console.log(`\nWrote ${OUTPUT_PATH}`);
+  console.log(`\nWrote ${OUTPUT_PATH} (${decisions.length} decisions)`);
 
   if (missing.length > 0) {
     console.error(
-      `\n${missing.length} page(s) are missing ## AI Summary — Developer sections:`
+      `\n${missing.length} decision page(s) are missing ## AI Summary — Developer:`
     );
-    missing.forEach((id) => console.error(`  ${id}`));
+    missing.forEach(({ id, title }) => console.error(`  [${id}] ${title}`));
     process.exit(1);
   }
 
