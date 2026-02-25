@@ -73,6 +73,8 @@ interface DecisionSummary {
 // Confluence API helpers
 // ---------------------------------------------------------------------------
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 function getAuth(): string {
   const email = process.env.CONFLUENCE_EMAIL;
   const token = process.env.CONFLUENCE_API_TOKEN;
@@ -83,6 +85,14 @@ function getAuth(): string {
     process.exit(1);
   }
   return Buffer.from(`${email}:${token}`).toString("base64");
+}
+
+function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
 }
 
 /**
@@ -97,7 +107,8 @@ async function fetchAllPageRefs(auth: string): Promise<PageRef[]> {
   while (true) {
     const cql = encodeURIComponent(`ancestor=${DECISION_LOG_ROOT} AND type=page`);
     const url = `${CONFLUENCE_BASE}/wiki/rest/api/content/search?cql=${cql}&limit=${limit}&start=${start}`;
-    const res = await fetch(url, {
+    console.log(`  GET ${url}`);
+    const res = await fetchWithTimeout(url, {
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",
@@ -114,6 +125,8 @@ async function fetchAllPageRefs(auth: string): Promise<PageRef[]> {
       totalSize: number;
     };
 
+    console.log(`  → ${data.size} results (${start + data.size} / ${data.totalSize} total)`);
+
     for (const r of data.results) {
       pages.push({ id: parseInt(r.id, 10), title: r.title });
     }
@@ -128,7 +141,7 @@ async function fetchAllPageRefs(auth: string): Promise<PageRef[]> {
 /** Fetches the storage-format body of a single page. */
 async function fetchPageBody(id: number, auth: string): Promise<string> {
   const url = `${CONFLUENCE_BASE}/wiki/rest/api/content/${id}?expand=body.storage`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       Authorization: `Basic ${auth}`,
       Accept: "application/json",
