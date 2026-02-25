@@ -1,7 +1,7 @@
 # NXD Decision Log — Developer AI Reference
 
 <!-- AUTO-GENERATED — do not edit by hand.
-     Run `npm run sync-decisions` to regenerate from Confluence. -->
+     Run `npm run sync-decisions -- --role Developer` to regenerate from Confluence. -->
 
 Contains the actionable constraints extracted from each NXD platform
 decision. Read by AI coding assistants to enforce standards.
