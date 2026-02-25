@@ -281,7 +281,7 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
     lines.push(`## ${sectionLabel}`, "");
 
     for (const d of group) {
-      lines.push(`**[${d.title}](${confluenceUrl(d.id)})** (${d.id}) — ${d.status}`);
+      lines.push(`**[${d.title}](${confluenceUrl(d.id)})** — ${d.status}`);
       for (const bullet of d.bullets) {
         lines.push(`- ${bullet}`);
       }
@@ -361,11 +361,11 @@ function writeStepSummary(stats: RunStats): void {
     "<details>",
     "<summary>Decisions included</summary>",
     "",
-    "| Title | ID | Classification | Status |",
-    "|---|---|---|---|",
+    "| Title | Classification | Status |",
+    "|---|---|---|",
   );
   for (const d of stats.decisions) {
-    lines.push(`| [${d.title}](${confluenceUrl(d.id)}) | ${d.id} | ${d.classification} | ${d.status} |`);
+    lines.push(`| [${d.title}](${confluenceUrl(d.id)}) | ${d.classification} | ${d.status} |`);
   }
   lines.push("</details>", "");
 
@@ -374,11 +374,11 @@ function writeStepSummary(stats: RunStats): void {
       "<details>",
       "<summary>Decision pages without AI Summary — Developer</summary>",
       "",
-      "| Title | ID |",
-      "|---|---|",
+      "| Title |",
+      "|---|",
     );
     for (const { id, title } of stats.skippedNoSummary) {
-      lines.push(`| [${title}](${confluenceUrl(id)}) | ${id} |`);
+      lines.push(`| [${title}](${confluenceUrl(id)}) |`);
     }
     lines.push("</details>", "");
   }
