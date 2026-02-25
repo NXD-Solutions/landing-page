@@ -174,7 +174,9 @@ function stripTags(html: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
+    .replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–");
 }
 
 /**
@@ -221,7 +223,7 @@ function extractClassification(body: string): Classification {
  */
 function extractDeveloperSummary(body: string): string[] {
   const headingPattern =
-    /<h2[^>]*>[\s\S]*?AI\s+Summary\s*[—\-–]\s*Developer[\s\S]*?<\/h2>/i;
+    /<h2[^>]*>\s*AI\s+Summary\s*(?:&mdash;|&ndash;|[—\-–])\s*Developer\s*<\/h2>/i;
   const headingMatch = headingPattern.exec(body);
   if (!headingMatch) return [];
 
