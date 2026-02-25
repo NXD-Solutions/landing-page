@@ -77,6 +77,20 @@ src/
 
 ---
 
+## Keeping AI context up to date
+
+`.claude/rules/decisions-developer.md` is auto-generated from the NXD Decision Log in Confluence. It contains the binding constraints AI assistants must follow.
+
+To regenerate after decisions are added or updated:
+
+1. Go to **Actions** → "Sync decisions from Confluence"
+2. Click **Run workflow** → **Run workflow**
+3. Merge the PR that is automatically opened
+
+Do not edit `decisions-developer.md` by hand — changes will be overwritten on the next sync.
+
+---
+
 ## Key decisions
 
 - React + Vite is the front-end standard — no framework exceptions without Architecture approval
