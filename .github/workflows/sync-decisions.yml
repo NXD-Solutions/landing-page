@@ -1,4 +1,4 @@
-name: Sync decisions from Confluence
+name: Sync decisions from 'Decision Log' in Confluence
 
 on:
   workflow_dispatch:
