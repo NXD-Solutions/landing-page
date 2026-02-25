@@ -281,7 +281,7 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
     lines.push(`## ${sectionLabel}`, "");
 
     for (const d of group) {
-      lines.push(`**[${d.title}](${confluenceUrl(d.id)})** — ${d.status}`);
+      lines.push(`**${d.title}** — ${d.status}`);
       for (const bullet of d.bullets) {
         lines.push(`- ${bullet}`);
       }
