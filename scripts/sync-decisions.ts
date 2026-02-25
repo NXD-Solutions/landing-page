@@ -460,6 +460,11 @@ async function main(): Promise<void> {
     if (bullets.length === 0) {
       missing.push({ id, title });
       console.warn(`  WARN [${id}] ${title} — missing AI Summary — Developer`);
+      if (process.env.SYNC_DEBUG) {
+        console.log(`  --- body tail [${id}] ---`);
+        console.log(body.slice(-2000));
+        console.log(`  --- end tail ---`);
+      }
     } else {
       console.log(`  OK   [${id}] ${title} (${classification}, ${status})`);
     }
