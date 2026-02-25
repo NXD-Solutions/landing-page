@@ -68,9 +68,6 @@ Update this file when decisions change status or content.
 **Per-tenant branding** (22937601) — Accepted
 - Platform must support per-tenant colour palette, logo, typography. Runtime and data-driven — no per-tenant deployments.
 
-**Decision log classification labels** (25264129) — Proposed
-- All decisions must carry: Strategic | Architectural | Standard. Content outside label scope must be extracted.
-
 ---
 
 ## Proposed (not yet Accepted — treat as direction, not binding)
