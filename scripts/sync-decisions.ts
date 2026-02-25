@@ -24,6 +24,11 @@ import { fileURLToPath } from "url";
 // ---------------------------------------------------------------------------
 
 const CONFLUENCE_BASE = "https://nordicexperiencedesign.atlassian.net";
+const CONFLUENCE_SPACE = "NSME";
+
+function confluenceUrl(id: number): string {
+  return `${CONFLUENCE_BASE}/wiki/spaces/${CONFLUENCE_SPACE}/pages/${id}`;
+}
 
 /** Root page of the Decision Log — all descendants are scanned. */
 const DECISION_LOG_ROOT = 17104898;
@@ -276,7 +281,7 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
     lines.push(`## ${sectionLabel}`, "");
 
     for (const d of group) {
-      lines.push(`**${d.title}** (${d.id}) — ${d.status}`);
+      lines.push(`**[${d.title}](${confluenceUrl(d.id)})** (${d.id}) — ${d.status}`);
       for (const bullet of d.bullets) {
         lines.push(`- ${bullet}`);
       }
@@ -360,7 +365,7 @@ function writeStepSummary(stats: RunStats): void {
     "|---|---|---|---|",
   );
   for (const d of stats.decisions) {
-    lines.push(`| ${d.title} | ${d.id} | ${d.classification} | ${d.status} |`);
+    lines.push(`| [${d.title}](${confluenceUrl(d.id)}) | ${d.id} | ${d.classification} | ${d.status} |`);
   }
   lines.push("</details>", "");
 
@@ -373,7 +378,7 @@ function writeStepSummary(stats: RunStats): void {
       "|---|---|",
     );
     for (const { id, title } of stats.skippedNoSummary) {
-      lines.push(`| ${title} | ${id} |`);
+      lines.push(`| [${title}](${confluenceUrl(id)}) | ${id} |`);
     }
     lines.push("</details>", "");
   }
