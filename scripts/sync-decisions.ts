@@ -178,6 +178,19 @@ function stripTags(html: string): string {
 }
 
 /**
+ * Extracts plain text from a table cell that may contain a Confluence
+ * status macro: <ac:structured-macro ac:name="status"><ac:parameter ac:name="title">VALUE</ac:parameter>...
+ * Falls back to stripping tags for plain-text cells.
+ */
+function extractCellText(cell: string): string {
+  const macroMatch = cell.match(
+    /<ac:parameter\s+ac:name="title"[^>]*>([\s\S]*?)<\/ac:parameter>/i
+  );
+  if (macroMatch) return macroMatch[1].trim();
+  return stripTags(cell).trim();
+}
+
+/**
  * Extracts the Status value from the At a Glance table.
  * Returns empty string if no Status row is found.
  */
@@ -186,7 +199,7 @@ function extractStatus(body: string): string {
     /<th[^>]*>\s*Status\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
   );
   if (!match) return "";
-  return stripTags(match[1]).trim();
+  return extractCellText(match[1]);
 }
 
 /** Extracts the Classification value from the At a Glance table. */
@@ -195,7 +208,7 @@ function extractClassification(body: string): Classification {
     /<th[^>]*>\s*Classification\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
   );
   if (!match) return "Unknown";
-  const raw = stripTags(match[1]).trim();
+  const raw = extractCellText(match[1]);
   if (raw.includes("Standard")) return "Standard";
   if (raw.includes("Architectural")) return "Architectural";
   if (raw.includes("Strategic")) return "Strategic";
