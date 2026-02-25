@@ -18,6 +18,7 @@ This is the public-facing marketing landing page for **Manager Hub** by NXD Solu
 | New feature | `feature/<short-description>` | `feature/hero-section` |
 | Bug fix | `fix/<short-description>` | `fix/nav-mobile-overflow` |
 | Chore / tooling | `chore/<short-description>` | `chore/update-tailwind` |
+| Automation (CI/CD) | `automated/<short-description>` | `automated/sync-decisions` |
 
 ### Workflow
 1. Create a branch from `main`: `git checkout -b feature/my-change`

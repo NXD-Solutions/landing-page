@@ -33,7 +33,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: chore/sync-decisions
+          branch: automated/sync-decisions
           delete-branch: true
           commit-message: "Update decisions.md from Confluence"
           title: "chore: sync decisions.md from Confluence"
