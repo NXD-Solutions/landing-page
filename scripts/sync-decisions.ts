@@ -467,7 +467,7 @@ async function main(): Promise<void> {
       console.log(`  OK   [${id}] ${title} (${classification}, ${status})`);
       decisions.push({ id, title, status, classification, bullets });
     }
-  }page
+  }
 
   if (errors.length > 0) {
     console.error("\nErrors fetching pages:");
