@@ -122,17 +122,17 @@ async function fetchAllPageRefs(auth: string): Promise<PageRef[]> {
     const data = (await res.json()) as {
       results: Array<{ id: string; title: string }>;
       size: number;
-      totalSize: number;
+      _links: { next?: string };
     };
-
-    console.log(`  → ${data.size} results (${start + data.size} / ${data.totalSize} total)`);
 
     for (const r of data.results) {
       pages.push({ id: parseInt(r.id, 10), title: r.title });
     }
 
     start += data.size;
-    if (start >= data.totalSize) break;
+    console.log(`  → ${data.size} results (${start} collected so far)`);
+
+    if (!data._links?.next) break;
   }
 
   return pages;
