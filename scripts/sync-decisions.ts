@@ -7,12 +7,12 @@
  *
  * A page is treated as a decision page if its At a Glance table has a
  * recognised Status value (Accepted, Proposed, Draft, Deprecated).
- * Structural pages (folders, index pages, the template) are skipped.
+ * Structural pages (folders, index pages) are skipped silently.
+ * Decision pages without an AI Summary — Developer section are also skipped
+ * silently — no error, no exclusion list needed.
  *
  * Usage:
  *   CONFLUENCE_EMAIL=you@example.com CONFLUENCE_API_TOKEN=xxx npx tsx scripts/sync-decisions.ts
- *
- * Exits with code 1 if any decision page is missing its AI Summary — Developer section.
  */
 
 import { writeFileSync, appendFileSync } from "fs";
@@ -27,15 +27,6 @@ const CONFLUENCE_BASE = "https://nordicexperiencedesign.atlassian.net";
 
 /** Root page of the Decision Log — all descendants are scanned. */
 const DECISION_LOG_ROOT = 17104898;
-
-/**
- * Pages to skip regardless of content.
- * Add structural pages here (template, index pages) that would otherwise
- * be misidentified as decision pages.
- */
-const EXCLUDED_PAGE_IDS = new Set([
-  17268756, // 📋 Decision Template
-]);
 
 /** Status values that identify a page as a decision (not a folder/index). */
 const KNOWN_STATUSES = new Set([
@@ -320,9 +311,9 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
 
 interface RunStats {
   discovered: number;
-  skipped: Array<{ id: number; title: string }>;
+  skippedStructural: Array<{ id: number; title: string }>;
+  skippedNoSummary: Array<{ id: number; title: string }>;
   decisions: DecisionSummary[];
-  missing: Array<{ id: number; title: string }>;
   errors: string[];
   outputWritten: boolean;
 }
@@ -333,44 +324,24 @@ function writeStepSummary(stats: RunStats): void {
 
   const lines: string[] = [];
 
-  const decisionsWithSummary = stats.decisions.filter((d) => d.bullets.length > 0);
-  const status =
-    stats.errors.length > 0
-      ? "Errors encountered"
-      : stats.missing.length > 0
-      ? `${stats.missing.length} decision(s) missing AI Summary`
-      : "All decisions synced";
-  const statusIcon =
-    stats.errors.length > 0 ? "❌" : stats.missing.length > 0 ? "⚠️" : "✅";
+  const statusLabel = stats.errors.length > 0 ? "Errors encountered" : "Decisions synced";
+  const statusIcon = stats.errors.length > 0 ? "❌" : "✅";
 
   lines.push(
-    `## ${statusIcon} Sync decisions — ${status}`,
+    `## ${statusIcon} Sync decisions — ${statusLabel}`,
     "",
     "| | Count |",
     "|---|---|",
     `| Pages discovered under Decision Log | ${stats.discovered} |`,
-    `| Skipped (no recognised status) | ${stats.skipped.length} |`,
-    `| Decision pages included | ${decisionsWithSummary.length} |`,
-    `| Missing AI Summary — Developer | ${stats.missing.length} |`,
+    `| Structural pages skipped (no status) | ${stats.skippedStructural.length} |`,
+    `| Decision pages without AI Summary (skipped) | ${stats.skippedNoSummary.length} |`,
+    `| Decisions included in output | ${stats.decisions.length} |`,
     `| Errors | ${stats.errors.length} |`,
     "",
   );
 
   if (stats.outputWritten) {
     lines.push(`**Output:** \`.claude/rules/decisions.md\` updated`, "");
-  }
-
-  if (stats.missing.length > 0) {
-    lines.push(
-      "### ⚠️ Missing AI Summary — Developer",
-      "",
-      "These decision pages need an `## AI Summary — Developer` section added in Confluence:",
-      "",
-    );
-    for (const { id, title } of stats.missing) {
-      lines.push(`- **${title}** (\`${id}\`)`);
-    }
-    lines.push("");
   }
 
   if (stats.errors.length > 0) {
@@ -388,20 +359,34 @@ function writeStepSummary(stats: RunStats): void {
     "| Title | ID | Classification | Status |",
     "|---|---|---|---|",
   );
-  for (const d of decisionsWithSummary) {
+  for (const d of stats.decisions) {
     lines.push(`| ${d.title} | ${d.id} | ${d.classification} | ${d.status} |`);
   }
   lines.push("</details>", "");
 
-  if (stats.skipped.length > 0) {
+  if (stats.skippedNoSummary.length > 0) {
     lines.push(
       "<details>",
-      "<summary>Skipped pages (no recognised status)</summary>",
+      "<summary>Decision pages without AI Summary — Developer</summary>",
       "",
       "| Title | ID |",
       "|---|---|",
     );
-    for (const { id, title } of stats.skipped) {
+    for (const { id, title } of stats.skippedNoSummary) {
+      lines.push(`| ${title} | ${id} |`);
+    }
+    lines.push("</details>", "");
+  }
+
+  if (stats.skippedStructural.length > 0) {
+    lines.push(
+      "<details>",
+      "<summary>Structural pages skipped</summary>",
+      "",
+      "| Title | ID |",
+      "|---|---|",
+    );
+    for (const { id, title } of stats.skippedStructural) {
       lines.push(`| ${title} | ${id} |`);
     }
     lines.push("</details>", "");
@@ -419,20 +404,17 @@ async function main(): Promise<void> {
 
   console.log(`Discovering pages under Decision Log root (${DECISION_LOG_ROOT})…`);
   const allPages = await fetchAllPageRefs(auth);
-  const candidates = allPages.filter((p) => !EXCLUDED_PAGE_IDS.has(p.id));
-  console.log(
-    `Found ${allPages.length} pages total, ${candidates.length} after exclusions. Fetching bodies…`
-  );
+  console.log(`Found ${allPages.length} pages. Fetching bodies…`);
 
   const bodyResults = await Promise.allSettled(
-    candidates.map((p) =>
+    allPages.map((p) =>
       fetchPageBody(p.id, auth).then((body) => ({ ...p, body }))
     )
   );
 
   const decisions: DecisionSummary[] = [];
-  const skipped: Array<{ id: number; title: string }> = [];
-  const missing: Array<{ id: number; title: string }> = [];
+  const skippedStructural: Array<{ id: number; title: string }> = [];
+  const skippedNoSummary: Array<{ id: number; title: string }> = [];
   const errors: string[] = [];
 
   for (const result of bodyResults) {
@@ -444,15 +426,14 @@ async function main(): Promise<void> {
     const { id, title, body } = result.value;
     const status = extractStatus(body);
 
-    // Skip pages that don't look like decision pages (no recognised Status)
     if (!KNOWN_STATUSES.has(status)) {
-      console.log(`  SKIP [${id}] ${title} (status: "${status}")`);
+      console.log(`  SKIP [${id}] ${title} (structural)`);
       if (process.env.SYNC_DEBUG) {
         console.log(`  --- body snippet [${id}] ---`);
         console.log(body.slice(0, 3000));
         console.log(`  --- end snippet ---`);
       }
-      skipped.push({ id, title });
+      skippedStructural.push({ id, title });
       continue;
     }
 
@@ -460,24 +441,18 @@ async function main(): Promise<void> {
     const bullets = extractDeveloperSummary(body);
 
     if (bullets.length === 0) {
-      missing.push({ id, title });
-      console.warn(`  WARN [${id}] ${title} — missing AI Summary — Developer`);
-      if (process.env.SYNC_DEBUG) {
-        console.log(`  --- body tail [${id}] ---`);
-        console.log(body.slice(-2000));
-        console.log(`  --- end tail ---`);
-      }
+      console.log(`  SKIP [${id}] ${title} (no AI Summary — Developer)`);
+      skippedNoSummary.push({ id, title });
     } else {
       console.log(`  OK   [${id}] ${title} (${classification}, ${status})`);
+      decisions.push({ id, title, status, classification, bullets });
     }
-
-    decisions.push({ id, title, status, classification, bullets });
   }
 
   if (errors.length > 0) {
     console.error("\nErrors fetching pages:");
     errors.forEach((e) => console.error("  " + e));
-    writeStepSummary({ discovered: allPages.length, skipped, decisions, missing, errors, outputWritten: false });
+    writeStepSummary({ discovered: allPages.length, skippedStructural, skippedNoSummary, decisions, errors, outputWritten: false });
     process.exit(1);
   }
 
@@ -485,15 +460,7 @@ async function main(): Promise<void> {
   writeFileSync(OUTPUT_PATH, markdown, "utf-8");
   console.log(`\nWrote ${OUTPUT_PATH} (${decisions.length} decisions)`);
 
-  writeStepSummary({ discovered: allPages.length, skipped, decisions, missing, errors, outputWritten: true });
-
-  if (missing.length > 0) {
-    console.error(
-      `\n${missing.length} decision page(s) are missing ## AI Summary — Developer:`
-    );
-    missing.forEach(({ id, title }) => console.error(`  [${id}] ${title}`));
-    process.exit(1);
-  }
+  writeStepSummary({ discovered: allPages.length, skippedStructural, skippedNoSummary, decisions, errors, outputWritten: true });
 
   console.log("Done.");
 }
