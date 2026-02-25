@@ -2,17 +2,19 @@
  * sync-decisions.ts
  *
  * Discovers all NXD platform decision pages by querying the Confluence
- * Decision Log space, extracts the "## AI Summary — Developer" section
- * from each, and writes .claude/rules/decisions.md grouped by classification.
+ * Decision Log space, extracts the "## AI Summary — <role>" section
+ * from each, and writes .claude/rules/decisions-<role>.md grouped by
+ * classification.
  *
  * A page is treated as a decision page if its At a Glance table has a
  * recognised Status value (Accepted, Proposed, Draft, Deprecated).
  * Structural pages (folders, index pages) are skipped silently.
- * Decision pages without an AI Summary — Developer section are also skipped
- * silently — no error, no exclusion list needed.
+ * Decision pages without an AI Summary section for the requested role
+ * are skipped silently — no error, no exclusion list needed.
  *
  * Usage:
- *   CONFLUENCE_EMAIL=you@example.com CONFLUENCE_API_TOKEN=xxx npx tsx scripts/sync-decisions.ts
+ *   CONFLUENCE_EMAIL=you@example.com CONFLUENCE_API_TOKEN=xxx \
+ *     npx tsx scripts/sync-decisions.ts --role Developer
  */
 
 import { writeFileSync, appendFileSync } from "fs";
@@ -41,9 +43,17 @@ const KNOWN_STATUSES = new Set([
   "Deprecated",
 ]);
 
+function getRole(): string {
+  const idx = process.argv.indexOf("--role");
+  if (idx !== -1 && process.argv[idx + 1]) return process.argv[idx + 1];
+  return "Developer";
+}
+
+const ROLE = getRole();
+
 const OUTPUT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../.claude/rules/decisions.md"
+  `../.claude/rules/decisions-${ROLE.toLowerCase()}.md`
 );
 
 // ---------------------------------------------------------------------------
@@ -211,15 +221,18 @@ function extractClassification(body: string): Classification {
 }
 
 /**
- * Extracts bullet points from the "## AI Summary — Developer" section.
+ * Extracts bullet points from the "## AI Summary — <role>" section.
  *
  * In Confluence storage format headings become <h2> elements and list items
  * become <li> elements. Bullets starting with "_" are template placeholders
  * and are ignored.
  */
-function extractDeveloperSummary(body: string): string[] {
-  const headingPattern =
-    /<h2[^>]*>\s*AI\s+Summary\s*(?:&mdash;|&ndash;|[—\-–])\s*Developer\s*<\/h2>/i;
+function extractRoleSummary(body: string, role: string): string[] {
+  const escaped = role.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const headingPattern = new RegExp(
+    `<h2[^>]*>\\s*AI\\s+Summary\\s*(?:&mdash;|&ndash;|[—\\-–])\\s*${escaped}\\s*<\\/h2>`,
+    "i"
+  );
   const headingMatch = headingPattern.exec(body);
   if (!headingMatch) return [];
 
@@ -253,12 +266,12 @@ const CLASSIFICATION_ORDER: Classification[] = [
   "Strategic",
 ];
 
-function buildMarkdown(decisions: DecisionSummary[]): string {
+function buildMarkdown(decisions: DecisionSummary[], role: string): string {
   const lines: string[] = [
-    "# NXD Decision Log — Developer AI Reference",
+    `# NXD Decision Log — ${role} AI Reference`,
     "",
     "<!-- AUTO-GENERATED — do not edit by hand.",
-    "     Run `npm run sync-decisions` to regenerate from Confluence. -->",
+    `     Run \`npm run sync-decisions -- --role ${role}\` to regenerate from Confluence. -->`,
     "",
     "Contains the actionable constraints extracted from each NXD platform",
     "decision. Read by AI coding assistants to enforce standards.",
@@ -407,6 +420,8 @@ function writeStepSummary(stats: RunStats): void {
 async function main(): Promise<void> {
   const auth = getAuth();
 
+  console.log(`Role: ${ROLE}`);
+  console.log(`Output: ${OUTPUT_PATH}`);
   console.log(`Discovering pages under Decision Log root (${DECISION_LOG_ROOT})…`);
   const allPages = await fetchAllPageRefs(auth);
   console.log(`Found ${allPages.length} pages. Fetching bodies…`);
@@ -443,7 +458,7 @@ async function main(): Promise<void> {
     }
 
     const classification = extractClassification(body);
-    const bullets = extractDeveloperSummary(body);
+    const bullets = extractRoleSummary(body, ROLE);
 
     if (bullets.length === 0) {
       console.log(`  SKIP [${id}] ${title} (no AI Summary — Developer)`);
@@ -461,7 +476,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const markdown = buildMarkdown(decisions);
+  const markdown = buildMarkdown(decisions, ROLE);
   writeFileSync(OUTPUT_PATH, markdown, "utf-8");
   console.log(`\nWrote ${OUTPUT_PATH} (${decisions.length} decisions)`);
 
