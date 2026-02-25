@@ -15,7 +15,7 @@
  * Exits with code 1 if any decision page is missing its AI Summary — Developer section.
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync, appendFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -290,6 +290,102 @@ function buildMarkdown(decisions: DecisionSummary[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Step summary (GitHub Actions)
+// ---------------------------------------------------------------------------
+
+interface RunStats {
+  discovered: number;
+  skipped: Array<{ id: number; title: string }>;
+  decisions: DecisionSummary[];
+  missing: Array<{ id: number; title: string }>;
+  errors: string[];
+  outputWritten: boolean;
+}
+
+function writeStepSummary(stats: RunStats): void {
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryFile) return; // not running in GitHub Actions
+
+  const lines: string[] = [];
+
+  const decisionsWithSummary = stats.decisions.filter((d) => d.bullets.length > 0);
+  const status =
+    stats.errors.length > 0
+      ? "Errors encountered"
+      : stats.missing.length > 0
+      ? `${stats.missing.length} decision(s) missing AI Summary`
+      : "All decisions synced";
+  const statusIcon =
+    stats.errors.length > 0 ? "❌" : stats.missing.length > 0 ? "⚠️" : "✅";
+
+  lines.push(
+    `## ${statusIcon} Sync decisions — ${status}`,
+    "",
+    "| | Count |",
+    "|---|---|",
+    `| Pages discovered under Decision Log | ${stats.discovered} |`,
+    `| Skipped (no recognised status) | ${stats.skipped.length} |`,
+    `| Decision pages included | ${decisionsWithSummary.length} |`,
+    `| Missing AI Summary — Developer | ${stats.missing.length} |`,
+    `| Errors | ${stats.errors.length} |`,
+    "",
+  );
+
+  if (stats.outputWritten) {
+    lines.push(`**Output:** \`.claude/rules/decisions.md\` updated`, "");
+  }
+
+  if (stats.missing.length > 0) {
+    lines.push(
+      "### ⚠️ Missing AI Summary — Developer",
+      "",
+      "These decision pages need an `## AI Summary — Developer` section added in Confluence:",
+      "",
+    );
+    for (const { id, title } of stats.missing) {
+      lines.push(`- **${title}** (\`${id}\`)`);
+    }
+    lines.push("");
+  }
+
+  if (stats.errors.length > 0) {
+    lines.push("### ❌ Errors", "");
+    for (const e of stats.errors) {
+      lines.push(`- ${e}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "<details>",
+    "<summary>Decisions included</summary>",
+    "",
+    "| Title | ID | Classification | Status |",
+    "|---|---|---|---|",
+  );
+  for (const d of decisionsWithSummary) {
+    lines.push(`| ${d.title} | ${d.id} | ${d.classification} | ${d.status} |`);
+  }
+  lines.push("</details>", "");
+
+  if (stats.skipped.length > 0) {
+    lines.push(
+      "<details>",
+      "<summary>Skipped pages (no recognised status)</summary>",
+      "",
+      "| Title | ID |",
+      "|---|---|",
+    );
+    for (const { id, title } of stats.skipped) {
+      lines.push(`| ${title} | ${id} |`);
+    }
+    lines.push("</details>", "");
+  }
+
+  appendFileSync(summaryFile, lines.join("\n"), "utf-8");
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -310,6 +406,7 @@ async function main(): Promise<void> {
   );
 
   const decisions: DecisionSummary[] = [];
+  const skipped: Array<{ id: number; title: string }> = [];
   const missing: Array<{ id: number; title: string }> = [];
   const errors: string[] = [];
 
@@ -325,6 +422,7 @@ async function main(): Promise<void> {
     // Skip pages that don't look like decision pages (no recognised Status)
     if (!KNOWN_STATUSES.has(status)) {
       console.log(`  SKIP [${id}] ${title} (no recognised status)`);
+      skipped.push({ id, title });
       continue;
     }
 
@@ -344,12 +442,15 @@ async function main(): Promise<void> {
   if (errors.length > 0) {
     console.error("\nErrors fetching pages:");
     errors.forEach((e) => console.error("  " + e));
+    writeStepSummary({ discovered: allPages.length, skipped, decisions, missing, errors, outputWritten: false });
     process.exit(1);
   }
 
   const markdown = buildMarkdown(decisions);
   writeFileSync(OUTPUT_PATH, markdown, "utf-8");
   console.log(`\nWrote ${OUTPUT_PATH} (${decisions.length} decisions)`);
+
+  writeStepSummary({ discovered: allPages.length, skipped, decisions, missing, errors, outputWritten: true });
 
   if (missing.length > 0) {
     console.error(
