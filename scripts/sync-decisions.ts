@@ -178,37 +178,34 @@ function stripTags(html: string): string {
 }
 
 /**
- * Extracts plain text from a table cell that may contain a Confluence
- * status macro: <ac:structured-macro ac:name="status"><ac:parameter ac:name="title">VALUE</ac:parameter>...
- * Falls back to stripping tags for plain-text cells.
+ * Finds the value cell for a given label in any two-column table.
+ *
+ * The At a Glance table uses <td><p><strong>Label</strong></p></td> for
+ * labels (not <th>), with plain text values in the adjacent <td>.
+ * Strips all tags from both cells before comparing / returning.
  */
-function extractCellText(cell: string): string {
-  const macroMatch = cell.match(
-    /<ac:parameter\s+ac:name="title"[^>]*>([\s\S]*?)<\/ac:parameter>/i
-  );
-  if (macroMatch) return macroMatch[1].trim();
-  return stripTags(cell).trim();
+function extractTableValue(body: string, label: string): string {
+  const rowPattern = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowPattern.exec(body)) !== null) {
+    const cells = [...rowMatch[1].matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)];
+    if (cells.length < 2) continue;
+    const cellLabel = stripTags(cells[0][1]).trim();
+    if (cellLabel.toLowerCase() === label.toLowerCase()) {
+      return stripTags(cells[1][1]).trim();
+    }
+  }
+  return "";
 }
 
-/**
- * Extracts the Status value from the At a Glance table.
- * Returns empty string if no Status row is found.
- */
+/** Extracts the Status value from the At a Glance table. */
 function extractStatus(body: string): string {
-  const match = body.match(
-    /<th[^>]*>\s*Status\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
-  );
-  if (!match) return "";
-  return extractCellText(match[1]);
+  return extractTableValue(body, "Status");
 }
 
 /** Extracts the Classification value from the At a Glance table. */
 function extractClassification(body: string): Classification {
-  const match = body.match(
-    /<th[^>]*>\s*Classification\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/i
-  );
-  if (!match) return "Unknown";
-  const raw = extractCellText(match[1]);
+  const raw = extractTableValue(body, "Classification");
   if (raw.includes("Standard")) return "Standard";
   if (raw.includes("Architectural")) return "Architectural";
   if (raw.includes("Strategic")) return "Strategic";
