@@ -447,7 +447,12 @@ async function main(): Promise<void> {
 
     // Skip pages that don't look like decision pages (no recognised Status)
     if (!KNOWN_STATUSES.has(status)) {
-      console.log(`  SKIP [${id}] ${title} (no recognised status)`);
+      console.log(`  SKIP [${id}] ${title} (status: "${status}")`);
+      if (process.env.SYNC_DEBUG) {
+        console.log(`  --- body snippet [${id}] ---`);
+        console.log(body.slice(0, 3000));
+        console.log(`  --- end snippet ---`);
+      }
       skipped.push({ id, title });
       continue;
     }
