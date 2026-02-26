@@ -19,7 +19,7 @@ decision. Read by AI coding assistants to enforce standards.
 
 ## Architectural — What we adopt (binding technology choices)
 
-**Monorepo with three-tier folder structure adopted for platform development** — Proposed
+**Monorepo with three-tier folder structure adopted for platform development** — Accepted
 - Three tiers: apps/ (FE), services/ (BE), packages/ (shared). infra/ at root for cluster-level only.
 - Service-specific infra, Dockerfile, OpenAPI spec, and tests live inside each service's folder.
 - .claude/rules/ holds compiled decision constraints — update rules/decisions.md when decisions change.
