@@ -77,7 +77,7 @@ src/
 
 ### Rules files (`.claude/rules/`)
 
-Every file in `.claude/rules/` must have a corresponding page under [Claude Code — Rules Reference](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/28442625) in Confluence. Any change to a rules file must include a review and update of the corresponding Confluence page in the same PR.
+Every rules file must have a matching [Confluence page](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/28442625). Changes to a rules file must include an update to the corresponding Confluence page in the same PR.
 
 ---
 
