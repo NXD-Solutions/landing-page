@@ -10,22 +10,7 @@ This is the public-facing marketing landing page for **Manager Hub** by NXD Solu
 
 ## Git workflow
 
-**Never commit directly to `main`.** All changes — including those made by AI assistants — must go through a feature branch and pull request.
-
-### Branch naming
-| Type | Pattern | Example |
-|---|---|---|
-| New feature | `feature/<short-description>` | `feature/hero-section` |
-| Bug fix | `fix/<short-description>` | `fix/nav-mobile-overflow` |
-| Chore / tooling | `chore/<short-description>` | `chore/update-tailwind` |
-| Automation (CI/CD) | `automated/<short-description>` | `automated/sync-decisions` |
-
-### Workflow
-1. Create a branch from `main`: `git checkout -b feature/my-change`
-2. Make commits on the branch
-3. Open a pull request against `main`
-4. **Before merging**, remind the user to test the deployment via the GitHub Pages PR preview (see below) if they haven't confirmed it yet
-5. Merge only after review and deployment is verified
+See `.claude/rules/git-workflow.md` for NXD git standards.
 
 ### Testing a PR on GitHub Pages
 GitHub Pages supports one deployment at a time. To preview a feature branch live:
@@ -40,11 +25,6 @@ GitHub Pages supports one deployment at a time. To preview a feature branch live
 > deployment unless the PR is ready for review — it takes production offline.
 >
 > This is a temporary approach until Azure environments are available.
-
-### Commit messages
-- Present tense, imperative: `Add hero section` not `Added hero section`
-- Keep the subject line under 72 characters
-- Add detail in the body if the why isn't obvious
 
 ---
 
