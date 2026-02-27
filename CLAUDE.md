@@ -79,6 +79,18 @@ src/
 
 Every rules file must have a matching [Confluence page](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/28442625). Changes to a rules file must include an update to the corresponding Confluence page in the same PR.
 
+### Repo layout
+
+This repo lives at `C:\Users\sixfu\IdeaProjects\landing-page\`. The `.github` directory is a **sibling**, not inside this repo:
+
+```
+IdeaProjects/
+  .github/          # GitHub org-level config — workflows, templates
+  landing-page/     # This repo
+```
+
+When looking for GitHub Actions workflows or issue templates, look in `C:\Users\sixfu\IdeaProjects\.github\`, not inside `landing-page`.
+
 ---
 
 ## Keeping AI context up to date
