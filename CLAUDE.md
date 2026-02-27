@@ -75,6 +75,10 @@ src/
   main.tsx      # React entry point
 ```
 
+### Rules files (`.claude/rules/`)
+
+Every file in `.claude/rules/` must have a corresponding page under [Claude Code — Rules Reference](https://nordicexperiencedesign.atlassian.net/wiki/spaces/NSME/pages/28442625) in Confluence. Any change to a rules file must include a review and update of the corresponding Confluence page in the same PR.
+
 ---
 
 ## Keeping AI context up to date
